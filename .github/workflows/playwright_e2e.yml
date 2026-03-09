@@ -9,8 +9,12 @@ on:
 
 jobs:
   test:
-    name: Run Pytest eBay Framework
+    name: Run Pytest on ${{ matrix.browser }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     
     steps:
     - name: Checkout Repository
@@ -31,13 +35,13 @@ jobs:
       env:
         PYTHONPATH: .
       run: |
-        # Run tests dynamically parameterized by JSON configs across 3 CPU workers
-        pytest tests/test_ebay_purchase.py -n 3 -v --alluredir=reports/allure-results
+        # Run tests dynamically parameterized across 3 CPU workers for the specific matrix browser
+        pytest tests/test_ebay_purchase.py -n 3 -v --browser ${{ matrix.browser }} --alluredir=reports/allure-results-${{ matrix.browser }}
         
     - name: Upload Allure Results Artifact
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: allure-results
-        path: reports/allure-results
+        name: allure-results-${{ matrix.browser }}
+        path: reports/allure-results-${{ matrix.browser }}
         retention-days: 7
