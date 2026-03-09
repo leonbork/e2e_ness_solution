@@ -13,7 +13,7 @@ This repository demonstrates a clean, scalable, object-oriented End-to-End brows
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Allure Commandline (to view rich HTML reports)
   - Options: `brew install allure` (Mac) or `npm install -g allure-commandline`
 
