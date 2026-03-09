@@ -100,6 +100,19 @@ class SearchPage(BasePage):
             logger.warning(f"Error parsing item price or URL: {e}")
 
     def _extract_product_data(self, item, urls: list[str], max_price: float) -> None:
+        # Exclude auction items which do not have a Buy It Now button natively
+        # Sponsored Auctions often hide their native CSS tags entirely
+        bids_locator = item.locator(".s-item__bids, .s-item__bidCount")
+        if bids_locator.count() > 0:
+            return
+            
+        try:
+            card_text = item.inner_text(timeout=2000).lower()
+            if "bid" in card_text or "offert" in card_text:
+                return
+        except Exception:
+            pass
+            
         price_element = item.locator(self.PRICE_SELECTOR).first
         is_visible = price_element.is_visible(timeout=500)
         
@@ -139,11 +152,17 @@ class SearchPage(BasePage):
 
     def _handle_pagination(self, current_url_count: int) -> None:
         next_btn = self.page.locator(self.NEXT_BTN_SELECTOR).first
+        
+        # Check if the button exists and is interactive before asking for attributes to avoid timeouts
+        if not next_btn.is_visible(timeout=3000):
+            logger.info("Pagination reached the end or 'Next' button not visible.")
+            return
+
         is_disabled = next_btn.get_attribute("aria-disabled") == "true"
         self._execute_click_next(next_btn, is_disabled, current_url_count)
 
     def _execute_click_next(self, next_btn, is_disabled: bool, current_url_count: int) -> None:
-        if not next_btn.is_visible() or is_disabled:
+        if is_disabled:
             logger.info("Pagination reached the end or 'Next' button disabled.")
             return
             

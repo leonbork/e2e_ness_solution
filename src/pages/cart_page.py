@@ -40,7 +40,13 @@ class CartPage(BasePage):
                 
             self._validate_not_empty()
             
-            total_text = self.get_text(self.cart_total_price, timeout_per_selector=5000)
+            try:
+                total_text = self.get_text(self.cart_total_price, timeout_per_selector=15000)
+            except Exception as e:
+                with open("chromium_cart_failed_loc.html", "w") as f:
+                    f.write(self.page.content())
+                logger.error(f"Dumping Cart State: Failed to locate. {e}")
+                raise e
                 
             logger.info(f"Extracted cart total string: {total_text}")
             
@@ -48,9 +54,14 @@ class CartPage(BasePage):
             self._assert_budget(actual_total, max_budget)
 
     def _ensure_on_cart_page(self) -> None:
-        if "cart.ebay.com" not in self.page.url:
-            self.page.locator("a[href*='cart.ebay.com'], .gh-cart-icon, a[aria-label*='cart' i]").first.click(force=True)
-        self.page.wait_for_load_state("networkidle", timeout=5000)
+        if "cart" not in self.page.url:
+            logger.info("Directly navigating to the Cart Checkout page to avoid Sliding Menu Overlay interception.")
+            self.page.goto("https://cart.ebay.com/", wait_until="domcontentloaded")
+            try:
+                # Wait for the specific container to show up rather than strict networkidle which fails on dynamic ad pipelines
+                self.page.wait_for_selector("[data-test-id='SUBTOTAL'], .cart-summary-line-item, .cart-bucket", timeout=10000)
+            except Exception:
+                pass # Proceed anyway and let the actual parsing fail if it truly didn't load
 
     def _validate_not_empty(self) -> None:
         is_empty_text = "empty" in self.page.title().lower()
@@ -58,6 +69,8 @@ class CartPage(BasePage):
         
         if is_empty_text or is_empty_selector:
             logger.error("Cart is empty!")
+            with open("chromium_cart_eval.html", "w") as f:
+                f.write(self.page.content())
             raise AssertionError("Cart is empty, could not validate total.")
 
     def _parse_cart_total(self, total_text: str) -> float:
