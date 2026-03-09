@@ -8,46 +8,62 @@ import allure
 logger = get_logger(__name__)
 
 class CartPage(BasePage):
+    # Class-level Locators
+    CART_TOTAL_PRICE_SELECTORS = [
+        "[data-test-id='SUBTOTAL'] span.text-display-span",
+        "[data-test-id='SUBTOTAL'] span",
+        "[data-test-id='SUBTOTAL']",
+        ".cart-summary-line-item .val span",
+        ".cart-summary-item__value span",
+        "div.total-row span",
+        ".summary-total",
+        "text='Subtotal' >> xpath=.."
+    ]
+    EMPTY_CART_SELECTOR = ".empty-cart"
+
     def __init__(self, page: Page):
         super().__init__(page)
-        
-        self.cart_total_price = SmartLocator("Cart Total Price", [
-            "[data-test-id='SUBTOTAL'] span.text-display-span",
-            ".cart-summary-line-item .val span",
-            "div.total-row span"
-        ])
+        self.cart_total_price = SmartLocator("Cart Total Price", self.CART_TOTAL_PRICE_SELECTORS)
         
     def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
-        """
-        Calculates the maximum allowed budget and asserts the actual cart total is lower.
-        """
         max_budget = budget_per_item * items_count
         logger.info(f"Validating cart max budget: {budget_per_item} * {items_count} = {max_budget}")
         
         with allure.step("Navigate to Cart and validate totals"):
-            # Navigate to the explicitly known cart URL in case we aren't there yet
-            self.navigate("/cart")
-            self.page.wait_for_load_state("domcontentloaded")
-            
-            # The test spec requires taking a screenshot immediately of the cart
+            self._ensure_on_cart_page()
             self.capture_screenshot("Cart_Page_Before_Validation")
-            
-            # Check for empty cart
-            if "empty" in self.page.title().lower() or self.page.locator(".empty-cart").is_visible():
-                logger.error("Cart is empty!")
-                raise AssertionError("Cart is empty, could not validate total.")
+            self._validate_not_empty()
             
             total_text = self.get_text(self.cart_total_price)
             logger.info(f"Extracted cart total string: {total_text}")
             
-            # Extract numbers like "$340.50" or "US $340.50" or "₪340.5" -> "340.50"
-            price_match = re.search(r'[\d,]+(\.\d+)?', total_text)
-            if not price_match:
-                raise ValueError(f"Could not parse a numeric price from '{total_text}'")
-                
-            parsed_price_str = price_match.group(0).replace(",", "")
-            actual_total = float(parsed_price_str)
-            logger.info(f"Parsed real total as Float: {actual_total}")
+            actual_total = self._parse_cart_total(total_text)
+            self._assert_budget(actual_total, max_budget)
+
+    def _ensure_on_cart_page(self) -> None:
+        if "cart.ebay.com" not in self.page.url:
+            self.page.goto("https://cart.ebay.com")
+            self.page.wait_for_load_state("domcontentloaded")
+
+    def _validate_not_empty(self) -> None:
+        is_empty_text = "empty" in self.page.title().lower()
+        is_empty_selector = self.page.locator(self.EMPTY_CART_SELECTOR).is_visible()
+        
+        if is_empty_text or is_empty_selector:
+            logger.error("Cart is empty!")
+            raise AssertionError("Cart is empty, could not validate total.")
+
+    def _parse_cart_total(self, total_text: str) -> float:
+        price_match = re.search(r'[\d,]+(\.\d+)?', total_text)
+        
+        if not price_match:
+            raise ValueError(f"Could not parse a numeric price from '{total_text}'")
             
-            assert actual_total <= max_budget, f"Cart total {actual_total} EXCEEDS max budget {max_budget}"
-            logger.info(f"Validation successful: {actual_total} <= {max_budget}")
+        parsed_price_str = price_match.group(0).replace(",", "")
+        actual_total = float(parsed_price_str)
+        logger.info(f"Parsed real total as Float: {actual_total}")
+        return actual_total
+
+    def _assert_budget(self, actual: float, limit: float) -> None:
+        assert actual <= limit, f"Cart total {actual} EXCEEDS max budget {limit}"
+        logger.info(f"Validation successful: {actual} <= {limit}")

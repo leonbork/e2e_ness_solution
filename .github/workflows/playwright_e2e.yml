@@ -1,0 +1,43 @@
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Pytest eBay Framework
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install playwright pytest pytest-playwright pytest-xdist allure-pytest playwright-stealth
+        playwright install chromium firefox webkit --with-deps
+        
+    - name: Run Pytest E2E Suite
+      env:
+        PYTHONPATH: .
+      run: |
+        # Run tests dynamically parameterized by JSON configs across 3 CPU workers
+        pytest tests/test_ebay_purchase.py -n 3 -v --alluredir=reports/allure-results
+        
+    - name: Upload Allure Results Artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: allure-results
+        path: reports/allure-results
+        retention-days: 7

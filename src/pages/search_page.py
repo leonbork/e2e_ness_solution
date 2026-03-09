@@ -8,88 +8,146 @@ import allure
 logger = get_logger(__name__)
 
 class SearchPage(BasePage):
+    # Class-level Locators
+    SEARCH_INPUT_SELECTORS = [
+        "input[aria-label='Search for anything']",
+        "input[name='_nkw']",
+        "#gh-ac"
+    ]
+    SEARCH_BUTTON_SELECTORS = [
+        "button[type='submit']",
+        "button[id='gh-search-btn']",
+        "input[value='Search']",
+        "#gh-btn"
+    ]
+    RESULTS_SELECTOR = ".srp-results"
+    ITEM_CARD_SELECTOR = "ul.srp-results li.s-item, .srp-results .s-item, .srp-results .s-card"
+    PRICE_SELECTOR = ".s-item__price, .s-card__price"
+    LINK_SELECTOR = ".s-item__link, .s-card__link"
+    NEXT_BTN_SELECTOR = "a.pagination__next"
+
     def __init__(self, page: Page):
         super().__init__(page)
-        
-        # Locators
-        self.search_input = SmartLocator("Search Input Field", [
-            "input[aria-label='Search for anything']",
-            "input[name='_nkw']",
-            "#gh-ac"
-        ])
-        
-        self.search_button = SmartLocator("Search Submit Button", [
-            "input[value='Search']",
-            "button[id='gh-btn']",
-            "#gh-btn"
-        ])
+        self.search_input = SmartLocator("Search Input Field", self.SEARCH_INPUT_SELECTORS)
+        self.search_button = SmartLocator("Search Submit Button", self.SEARCH_BUTTON_SELECTORS)
 
-        # We don't strictly use SmartLocator for all dynamic list items since we iterate over them natively in Playwright.
-
-    def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5) -> list[str]:
+    def search_items_by_name_under_price(
+        self, 
+        query: str, 
+        max_price: float, 
+        limit: int = 5,
+        max_pages_to_check: int = 5
+    ) -> list[str]:
         """
         Searches for a query, applies a max price filter, and returns up to `limit` URLs of items matching criteria.
-        Handles Pagination if < 5 items on the first page.
+        Handles Pagination dynamically without nested structures.
         """
         urls = []
-        
         with allure.step(f"Search for '{query}' and collect up to {limit} items under {max_price}"):
-            # 1. Search for items
             self.fill(self.search_input, query)
             self.click(self.search_button)
+            self.page.wait_for_selector(self.RESULTS_SELECTOR, timeout=10000)
             
-            # 2. Wait for results to load
-            self.page.wait_for_selector(".srp-results", timeout=10000)
+            self._apply_buy_it_now_filter()
             
-            # It's better to iterate pages up to a reasonable amount
-            max_pages_to_check = 5
-            
-            for page_num in range(1, max_pages_to_check + 1):
-                logger.info(f"Scanning search results page {page_num}...")
-                
-                # Fetch all item cards on the current page
-                items = self.page.locator("ul.srp-results li.s-item").all()
-                for item in items:
-                    try:
-                        # Extract price text
-                        price_element = item.locator(".s-item__price")
-                        # Sometimes rows might not be products (e.g. ads or empty stubs without price)
-                        if not price_element.is_visible(timeout=500):
-                            continue
-                        
-                        price_text = price_element.inner_text()
-                        
-                        # Handle cases like "ILs 150.00 to ILs 200.00" - take the minimum or just parse first float
-                        price_match = re.search(r'[\d,]+(\.\d+)?', price_text)
-                        if price_match:
-                            parsed_price_str = price_match.group(0).replace(",", "")
-                            item_price = float(parsed_price_str)
-                            
-                            if item_price <= max_price:
-                                link_element = item.locator(".s-item__link")
-                                href = link_element.get_attribute("href")
-                                if href and href not in urls:
-                                    urls.append(href)
-                                    logger.info(f"Found item under {max_price}: {item_price} at {href}")
-                                    
-                                if len(urls) >= limit:
-                                    logger.info(f"Successfully collected {limit} URLs.")
-                                    return urls
-                    except Exception as e:
-                        logger.warning(f"Error parsing item price or URL: {e}")
-                        continue
-                
-                # If we haven't reached the limit, try to go to the next page
-                if len(urls) < limit:
-                    next_btn = self.page.locator("a.pagination__next")
-                    if next_btn.is_visible() and not next_btn.get_attribute("aria-disabled") == "true":
-                        logger.info(f"Collected {len(urls)} items. Clicking next page...")
-                        with allure.step("Click next page symbol"):
-                            next_btn.click()
-                            self.page.wait_for_selector(".srp-results", timeout=10000)
-                    else:
-                        logger.info("Pagination reached the end or 'Next' button disabled.")
-                        break
+            # Map over pages up to max pages. The helper handles early exit internally.
+            page_sequence = range(1, max_pages_to_check + 1)
+            # using a stateful lambda to allow breaking the mapping if quota met
+            self._traverse_pages(page_sequence, urls, max_price, limit, max_pages_to_check)
 
         logger.info(f"Capping at {len(urls)} URLs collected overall.")
         return urls
+
+    def _apply_buy_it_now_filter(self) -> None:
+        with allure.step("Apply 'Buy It Now' filter to exclude Auctions"):
+            try:
+                loc = self.page.locator("ul.srp-sortable-bttn li:has-text('Buy It Now'), a:has-text('Buy It Now')").first
+                if loc.is_visible(timeout=2000):
+                    loc.click(timeout=3000)
+                    self.page.wait_for_load_state("networkidle", timeout=3000)
+            except Exception as e:
+                logger.warning(f"Could not apply Buy It Now filter: {e}")
+
+    def _traverse_pages(self, page_sequence: range, urls: list[str], max_price: float, limit: int, max_pages: int) -> None:
+        def process_page(page_num):
+            if len(urls) >= limit:
+                return False
+                
+            logger.info(f"Scanning search results page {page_num}...")
+            self._gather_urls_from_page(urls, max_price, limit)
+            
+            if len(urls) >= limit or page_num == max_pages:
+                return False
+                
+            self._handle_pagination(len(urls))
+            return True
+            
+        # Iterate until a page reports False (quota met or max page reached)
+        list(map(lambda p: process_page(p) and None, page_sequence))
+
+    def _gather_urls_from_page(self, urls: list[str], max_price: float, limit: int) -> None:
+        items = self.page.locator(self.ITEM_CARD_SELECTOR).all()
+        # use map with a helper function to process all items
+        list(map(lambda item: self._process_single_card(item, urls, max_price, limit), items))
+
+    def _process_single_card(self, item, urls: list[str], max_price: float, limit: int) -> None:
+        if len(urls) >= limit:
+            return
+            
+        try:
+            self._extract_product_data(item, urls, max_price)
+        except Exception as e:
+            logger.warning(f"Error parsing item price or URL: {e}")
+
+    def _extract_product_data(self, item, urls: list[str], max_price: float) -> None:
+        price_element = item.locator(self.PRICE_SELECTOR).first
+        is_visible = price_element.is_visible(timeout=500)
+        
+        self._evaluate_price(is_visible, price_element, item, urls, max_price)
+
+    def _evaluate_price(self, is_visible: bool, price_element, item, urls: list[str], max_price: float) -> None:
+        if not is_visible:
+            return
+            
+        price_text = price_element.inner_text()
+        price_match = re.search(r'[\d,]+(\.\d+)?', price_text)
+        
+        self._validate_and_append(price_match, item, urls, max_price)
+
+    def _validate_and_append(self, price_match, item, urls: list[str], max_price: float) -> None:
+        if not price_match:
+            return
+            
+        parsed_price_str = price_match.group(0).replace(",", "")
+        item_price = float(parsed_price_str)
+        
+        self._finalize_url_extraction(item_price, max_price, item, urls)
+
+    def _finalize_url_extraction(self, item_price: float, max_price: float, item, urls: list[str]) -> None:
+        if item_price > max_price:
+            return
+            
+        link_element = item.locator(self.LINK_SELECTOR).first
+        href = link_element.get_attribute("href")
+        
+        self._commit_url(href, item_price, max_price, urls)
+
+    def _commit_url(self, href, item_price: float, max_price: float, urls: list[str]) -> None:
+        if href and href not in urls:
+            urls.append(href)
+            logger.info(f"Found item under {max_price}: {item_price} at {href}")
+
+    def _handle_pagination(self, current_url_count: int) -> None:
+        next_btn = self.page.locator(self.NEXT_BTN_SELECTOR).first
+        is_disabled = next_btn.get_attribute("aria-disabled") == "true"
+        self._execute_click_next(next_btn, is_disabled, current_url_count)
+
+    def _execute_click_next(self, next_btn, is_disabled: bool, current_url_count: int) -> None:
+        if not next_btn.is_visible() or is_disabled:
+            logger.info("Pagination reached the end or 'Next' button disabled.")
+            return
+            
+        logger.info(f"Collected {current_url_count} items. Clicking next page...")
+        with allure.step("Click next page symbol"):
+            next_btn.click()
+            self.page.wait_for_selector(self.RESULTS_SELECTOR, timeout=10000)

@@ -1,6 +1,16 @@
-{
-  "search_query": "shoes",
-  "max_price": 220,
-  "limit": 5,
-  "budget_per_item": 220
-}
+[
+  {
+    "scenario_name": "affordable_shoes",
+    "search_query": "shoes",
+    "max_price": 220.0,
+    "limit": 5,
+    "budget_per_item": 220.0
+  },
+  {
+    "scenario_name": "cheap_watches",
+    "search_query": "watch",
+    "max_price": 50.0,
+    "limit": 2,
+    "budget_per_item": 50.0
+  }
+]
