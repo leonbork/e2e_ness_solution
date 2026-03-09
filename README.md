@@ -44,6 +44,19 @@ This repository demonstrates a clean, scalable, object-oriented End-to-End brows
    allure serve reports/allure-results-YYYYMMDD_HHMMSS
    ```
 
+### Cross-Browser Testing
+The framework naturally supports cross-browser execution via Playwright. By default, it runs Chromium. You can switch or combine browser engines natively from the CLI:
+```bash
+# Run explicitly on Firefox
+pytest tests/test_ebay_purchase.py --browser firefox
+
+# Run explicitly on Apple Safari (WebKit)
+pytest tests/test_ebay_purchase.py --browser webkit
+
+# Run concurrently across all three major browser engines
+pytest tests/test_ebay_purchase.py --browser chromium --browser firefox --browser webkit
+```
+
 ## CI/CD Pipeline (GitHub Actions)
 This repository includes a robust, production-ready Continuous Integration pipeline using **GitHub Actions**.
 - **Trigger**: The pipeline executes automatically on every `push` to `main` and all `pull_request` submissions.
