@@ -36,16 +36,10 @@ class SmartLocator:
         """
         logger.info(f"Attempting to resolve SmartLocator for '{self.name}'")
         
-        # dynamic search generator eliminating the for/if struct
-        resolved_locator = next(
-            (self._evaluate_selector(page, idx, sel, timeout_per_selector) 
-             for idx, sel in enumerate(self.selectors) 
-             if self._evaluate_selector(page, idx, sel, timeout_per_selector)), 
-            None
-        )
-        
-        if resolved_locator:
-            return resolved_locator
+        for idx, sel in enumerate(self.selectors):
+            resolved_locator = self._evaluate_selector(page, idx, sel, timeout_per_selector)
+            if resolved_locator:
+                return resolved_locator
 
         return self._handle_total_failure(page)
 
