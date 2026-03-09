@@ -47,7 +47,7 @@ class CartPage(BasePage):
 
     def _validate_not_empty(self) -> None:
         is_empty_text = "empty" in self.page.title().lower()
-        is_empty_selector = self.page.locator(self.EMPTY_CART_SELECTOR).is_visible()
+        is_empty_selector = self.page.locator(self.EMPTY_CART_SELECTOR).first.is_visible()
         
         if is_empty_text or is_empty_selector:
             logger.error("Cart is empty!")
