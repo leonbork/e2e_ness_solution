@@ -20,11 +20,11 @@ class SearchPage(BasePage):
         "input[value='Search']",
         "#gh-btn"
     ]
-    RESULTS_SELECTOR = ".srp-results"
+    RESULTS_SELECTOR = ".srp-results, .srp-river"
     ITEM_CARD_SELECTOR = "ul.srp-results li.s-item, .srp-results .s-item, .srp-results .s-card"
     PRICE_SELECTOR = ".s-item__price, .s-card__price"
     LINK_SELECTOR = ".s-item__link, .s-card__link"
-    NEXT_BTN_SELECTOR = "a.pagination__next"
+    NEXT_BTN_SELECTOR = "a.pagination__next, a[aria-label='Next page']"
 
     def __init__(self, page: Page):
         super().__init__(page)

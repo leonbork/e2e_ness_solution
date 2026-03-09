@@ -16,7 +16,7 @@ class ItemPage(BasePage):
         "[data-testid='x-atc-action']"
     ]
     DROPDOWN_SELECTOR = "select[class*='x-msku__select-box'], select.listbox__native, select.msku-sel"
-    OPTION_SELECTOR = "option"
+    OPTION_SELECTOR = "option, [role='option']"
 
     def __init__(self, page: Page):
         super().__init__(page)

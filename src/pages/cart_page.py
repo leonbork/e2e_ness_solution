@@ -19,7 +19,7 @@ class CartPage(BasePage):
         ".summary-total",
         "text='Subtotal' >> xpath=.."
     ]
-    EMPTY_CART_SELECTOR = ".empty-cart"
+    EMPTY_CART_SELECTOR = ".empty-cart, .cart-empty, .font-title-3"
 
     def __init__(self, page: Page):
         super().__init__(page)
