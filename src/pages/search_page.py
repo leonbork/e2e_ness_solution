@@ -63,7 +63,7 @@ class SearchPage(BasePage):
             try:
                 loc = self.page.locator("ul.srp-sortable-bttn li:has-text('Buy It Now'), a:has-text('Buy It Now')").first
                 if loc.is_visible(timeout=2000):
-                    loc.click(timeout=3000)
+                    loc.click(timeout=3000, force=True)
                     self.page.wait_for_load_state("networkidle", timeout=3000)
             except Exception as e:
                 logger.warning(f"Could not apply Buy It Now filter: {e}")
@@ -149,5 +149,5 @@ class SearchPage(BasePage):
             
         logger.info(f"Collected {current_url_count} items. Clicking next page...")
         with allure.step("Click next page symbol"):
-            next_btn.click()
+            next_btn.click(force=True)
             self.page.wait_for_selector(self.RESULTS_SELECTOR, timeout=10000)

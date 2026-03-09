@@ -27,7 +27,7 @@ class BasePage:
         logger.info(f"Clicking on '{smart_locator.name}'")
         with allure.step(f"Click on {smart_locator.name}"):
             loc = smart_locator.resolve(self.page, timeout_per_selector)
-            loc.click()
+            loc.click(force=True)
 
     def fill(self, smart_locator: SmartLocator, text: str, timeout_per_selector: float = 3000):
         """
