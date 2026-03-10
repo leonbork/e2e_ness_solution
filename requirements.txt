@@ -2,5 +2,6 @@ playwright>=1.42.0
 pytest>=8.1.1
 pytest-playwright>=0.4.4
 pytest-xdist>=3.5.0
+pytest-rerunfailures>=14.0
 allure-pytest>=2.13.5
 playwright-stealth>=1.0.6

@@ -25,6 +25,16 @@ class SearchPage(BasePage):
     PRICE_SELECTOR = ".s-item__price, .s-card__price"
     LINK_SELECTOR = ".s-item__link, .s-card__link"
     NEXT_BTN_SELECTOR = "a.pagination__next, a[aria-label='Next page']"
+    MAX_PRICE_INPUT_SELECTORS = [
+        "input[aria-label='Maximum Value in $']",
+        "input[name='_udhi']",
+        ".x-refine__price input:last-of-type",
+    ]
+    PRICE_FILTER_GO_SELECTORS = [
+        "button[aria-label='Submit price range']",
+        ".x-refine__price button",
+        "button.fake-btn:has-text('Go')",
+    ]
 
     def __init__(self, page: Page):
         super().__init__(page)
@@ -49,7 +59,8 @@ class SearchPage(BasePage):
             self.page.wait_for_selector(self.RESULTS_SELECTOR, timeout=10000)
             
             self._apply_buy_it_now_filter()
-            
+            self._apply_max_price_filter(max_price)
+
             # Map over pages up to max pages. The helper handles early exit internally.
             page_sequence = range(1, max_pages_to_check + 1)
             # using a stateful lambda to allow breaking the mapping if quota met
@@ -57,6 +68,38 @@ class SearchPage(BasePage):
 
         logger.info(f"Capping at {len(urls)} URLs collected overall.")
         return urls
+
+    def _apply_max_price_filter(self, max_price: float) -> None:
+        with allure.step(f"Apply max price filter: ${max_price}"):
+            try:
+                # Try each known max-price input selector
+                price_input = None
+                for selector in self.MAX_PRICE_INPUT_SELECTORS:
+                    loc = self.page.locator(selector).first
+                    if loc.is_visible(timeout=2000):
+                        price_input = loc
+                        logger.info(f"Found max price input using: {selector}")
+                        break
+
+                if not price_input:
+                    logger.warning("Max price filter input not found on page — skipping UI filter, will filter manually.")
+                    return
+
+                price_input.click()
+                price_input.fill(str(int(max_price)))
+
+                # Click the "Go" submit button for the price range
+                for selector in self.PRICE_FILTER_GO_SELECTORS:
+                    btn = self.page.locator(selector).first
+                    if btn.is_visible(timeout=1500):
+                        btn.click(force=True)
+                        logger.info(f"Submitted price filter using: {selector}")
+                        break
+
+                self.page.wait_for_load_state("networkidle", timeout=5000)
+                logger.info(f"Max price filter applied: <= ${max_price}")
+            except Exception as e:
+                logger.warning(f"Could not apply max price filter: {e}. Will fall back to manual price parsing.")
 
     def _apply_buy_it_now_filter(self) -> None:
         with allure.step("Apply 'Buy It Now' filter to exclude Auctions"):
@@ -83,12 +126,14 @@ class SearchPage(BasePage):
             return True
             
         # Iterate until a page reports False (quota met or max page reached)
-        list(map(lambda p: process_page(p) and None, page_sequence))
+        for page_num in page_sequence:
+            if not process_page(page_num):
+                break
 
     def _gather_urls_from_page(self, urls: list[str], max_price: float, limit: int) -> None:
         items = self.page.locator(self.ITEM_CARD_SELECTOR).all()
-        # use map with a helper function to process all items
-        list(map(lambda item: self._process_single_card(item, urls, max_price, limit), items))
+        for item in items:
+            self._process_single_card(item, urls, max_price, limit)
 
     def _process_single_card(self, item, urls: list[str], max_price: float, limit: int) -> None:
         if len(urls) >= limit:

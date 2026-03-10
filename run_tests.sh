@@ -8,7 +8,7 @@ RESULTS_DIR="reports/allure-results-${TIMESTAMP}"
 echo "Executing tests in parallel matrix..."
 echo "Results will be saved to: ${RESULTS_DIR}"
 
-PYTHONPATH=. pytest tests/test_ebay_purchase.py -n 3 --browser chromium --alluredir="${RESULTS_DIR}"
+PYTHONPATH=. pytest tests/test_ebay_purchase.py -n 2 --browser chromium --alluredir="${RESULTS_DIR}"
 
 echo ""
 echo "Test execution completed. You can view the report by running:"

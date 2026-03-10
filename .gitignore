@@ -3,8 +3,11 @@ venv/
 __pycache__/
 allure-results/
 allure-report/
+reports/
+debug/
 *.pyc
 .env
 temp.txt
-images/
-ebay.png
+chromium_*.html
+dumped_*.txt
+debug_scripts/

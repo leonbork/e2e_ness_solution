@@ -9,39 +9,55 @@ on:
 
 jobs:
   test:
-    name: Run Pytest on ${{ matrix.browser }}
+    name: Run Pytest on ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
-    
+        include:
+          # Standard Playwright-bundled browser engines
+          - browser: chromium
+            name: chromium
+          - browser: firefox
+            name: firefox
+          - browser: webkit
+            name: webkit
+          # System Chrome — different version from bundled Chromium, covers multi-version requirement
+          - browser: chromium
+            channel: chrome
+            name: chrome
+
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install playwright pytest pytest-playwright pytest-xdist allure-pytest playwright-stealth
-        playwright install chromium firefox webkit --with-deps
-        
+        pip install -r requirements.txt
+        playwright install ${{ matrix.browser }} --with-deps
+
     - name: Run Pytest E2E Suite
       env:
         PYTHONPATH: .
       run: |
-        # Run tests dynamically parameterized across 3 CPU workers for the specific matrix browser
-        pytest tests/test_ebay_purchase.py -n 3 -v --browser ${{ matrix.browser }} --alluredir=reports/allure-results-${{ matrix.browser }}
-        
+        CHANNEL_ARG=""
+        if [ -n "${{ matrix.channel }}" ]; then
+          CHANNEL_ARG="--browser-channel ${{ matrix.channel }}"
+        fi
+        pytest tests/test_ebay_purchase.py -n 2 -v \
+          --browser ${{ matrix.browser }} $CHANNEL_ARG \
+          --alluredir=reports/allure-results-${{ matrix.name }}
+
     - name: Upload Allure Results Artifact
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: allure-results-${{ matrix.browser }}
-        path: reports/allure-results-${{ matrix.browser }}
+        name: allure-results-${{ matrix.name }}
+        path: reports/allure-results-${{ matrix.name }}
         retention-days: 7

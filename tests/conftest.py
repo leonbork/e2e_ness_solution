@@ -2,14 +2,17 @@ import pytest
 import allure
 from playwright.sync_api import sync_playwright
 from playwright_stealth.stealth import Stealth
+from config.config import DEFAULT_TIMEOUT_MS
 
 @pytest.fixture
 def page(context):
     """
     Override default Pytest-Playwright page fixture to universally inject stealth scripts.
     This scrubs the navigator.webdriver signatures hiding the automated browser from eBay CAPTCHA.
+    Applies DEFAULT_TIMEOUT_MS from config so ENV-based timeout control works end-to-end.
     """
     page = context.new_page()
+    page.set_default_timeout(DEFAULT_TIMEOUT_MS)
     stealth_bot = Stealth()
     stealth_bot.apply_stealth_sync(page)
     yield page
